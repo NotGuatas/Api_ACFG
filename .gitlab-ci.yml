@@ -1,0 +1,70 @@
+image: maven:3.9.6-eclipse-temurin-17-alpine
+
+stages:
+  - build
+  - test
+  - packing
+  - deploy
+  - post_deploy 
+
+variables:
+  MAVEN_OPTS: "-Dmaven.test.failure.ignore=false"
+
+# 1) Build: compilar el proyecto
+build:
+  stage: build
+  script:
+    - echo "Compilando proyecto con Maven"
+    - ./mvnw -B clean compile
+  artifacts:
+    paths:
+      - target/
+
+# 2) Test: ejecutar pruebas unitarias
+test:
+  stage: test
+  script:
+    - echo "Ejecutando pruebas unitarias"
+    - ./mvnw -B test
+  artifacts:
+    paths:
+      - target/
+
+# 3) Packing: empaquetar y copiar JAR a EC2
+packing:
+  stage: packing
+  before_script:
+    - apk update && apk add --no-cache openssh-client
+  script:
+    - echo "Empaquetando con Maven"
+    - ./mvnw -B package -DskipTests
+    - echo "Ajustando los permisos de la clave"
+    - chmod 600 /builds/202510/to-do-list.tmp/AWS_KEY
+    - echo "Copiando JAR a EC2"
+    - scp -o StrictHostKeyChecking=no -i $AWS_KEY target/to-do-list-api-0.0.1-SNAPSHOT.jar ubuntu@3.145.138.105:/home/ubuntu/to-do-list-api/api.jar
+  artifacts:
+    paths:
+      - target/to-do-list-api-0.0.1-SNAPSHOT.jar
+
+# 4) Deploy: detener versión anterior y levantar la nueva
+deploy:
+  stage: deploy
+  before_script:
+    - apk update && apk add --no-cache openssh-client
+  script:
+    - echo "Ajustando los permisos de la clave"
+    - chmod 600 /builds/202510/to-do-list.tmp/AWS_KEY
+    - echo "Deteniendo cualquier instancia previa de la API"
+    - nohup ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "nohup pkill -f 'java -jar'  > /dev/null 2>&1 &"
+    - echo "Ejecutando la nueva versión"
+    - nohup ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "nohup java -jar /home/ubuntu/to-do-list-api/api.jar > /dev/null 2>&1 &"
+  environment: production
+
+# 5) Post-deploy: verificación
+post_deploy:
+  stage: post_deploy
+  before_script:
+    - apk update && apk add --no-cache openssh-client curl
+  script:
+    - echo "Verificando que la API responda"
+    - ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "curl -f http://localhost:8080/api/tasks || exit 1"
