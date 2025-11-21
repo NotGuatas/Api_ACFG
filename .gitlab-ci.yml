@@ -10,7 +10,7 @@ stages:
 variables:
   MAVEN_OPTS: "-Dmaven.test.failure.ignore=false"
 
-# 1) Build: compilar el proyecto
+# 1) Build: compilar el proyecto o
 build:
   stage: build
   script:
