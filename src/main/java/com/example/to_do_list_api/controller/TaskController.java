@@ -2,6 +2,7 @@ package com.example.to_do_list_api.controller;
 
 import com.example.to_do_list_api.model.Task;
 import com.example.to_do_list_api.repository.TaskRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,8 +20,9 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<Task> getAll() {
-        return repository.findAll();
+    public ResponseEntity<List<Task>> getAll() {
+        List<Task> tasks = repository.findAll();
+        return ResponseEntity.ok(tasks);
     }
 
     @GetMapping("/{id}")
@@ -31,8 +33,10 @@ public class TaskController {
     }
 
     @PostMapping
-    public Task create(@RequestBody Task task) {
-        return repository.save(task);
+     public ResponseEntity<Task> create(@RequestBody Task task) {
+        Task saved = repository.save(task);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+
     }
 
     @PutMapping("/{id}")
@@ -45,7 +49,8 @@ public class TaskController {
                     task.setTitle(updated.getTitle());
                     task.setDescription(updated.getDescription());
                     task.setCompleted(updated.isCompleted());
-                    return ResponseEntity.ok(repository.save(task));
+                    Task saved = repository.save(task);
+                    return ResponseEntity.ok(saved);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
