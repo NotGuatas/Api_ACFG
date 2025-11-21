@@ -15,7 +15,7 @@ build:
   stage: build
   script:
     - echo "Compilando proyecto con Maven"
-    - ./mvn -B clean compile
+    - mvn -B clean compile
   artifacts:
     paths:
       - target/
@@ -25,7 +25,7 @@ test:
   stage: test
   script:
     - echo "Ejecutando pruebas unitarias"
-    - ./mvn -B test
+    - mvn -B test
   artifacts:
     paths:
       - target/
@@ -37,7 +37,7 @@ packing:
     - apk update && apk add --no-cache openssh-client
   script:
     - echo "Empaquetando con Maven"
-    - ./mvn -B package -DskipTests
+    - mvn -B package -DskipTests
     - echo "Ajustando los permisos de la clave"
     - chmod 600 /builds/202510/to-do-list.tmp/AWS_KEY
     - echo "Copiando JAR a EC2"
