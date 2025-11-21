@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+        h1 {
+            color: #333;
+        }
+        form {
+            margin: 20px 0;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .tasks-list {
+            margin-top: 20px;
+            width: 80%;
+        }
+        .task {
+            background-color: #fff;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .task button {
+            background-color: #f44336;
+        }
+        .task button:hover {
+            background-color: #e53935;
+        }
+        .task .status {
+            font-weight: bold;
+            color: #4CAF50; /* Verde para tareas completadas */
+        }
+        .task .status.incomplete {
+            color: #f44336; /* Rojo para tareas no completadas */
+        }
+        .task .createdAt {
+            font-size: 0.8em;
+            color: #777;
+        }
+        #edit-form {
+            margin-top: 20px;
+        }
+        .edit-inputs {
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>To-Do List API</h1>
+
+    <form id="task-form">
+        <input type="text" id="title" placeholder="Task Title" required>
+        <input type="text" id="description" placeholder="Task Description" required>
+        <button type="submit">Add Task</button>
+    </form>
+
+    <div class="tasks-list" id="tasks-list">
+        <!-- Tasks will be displayed here -->
+    </div>
+
+    <div id="edit-form" style="display: none;">
+        <h2>Edit Task</h2>
+        <div class="edit-inputs">
+            <input type="text" id="edit-title" placeholder="Edit Title" required>
+            <input type="text" id="edit-description" placeholder="Edit Description" required>
+            <label for="edit-completed">Completed:</label>
+            <input type="checkbox" id="edit-completed">
+        </div>
+        <button onclick="saveEdit()">Save</button>
+        <button onclick="cancelEdit()">Cancel</button>
+    </div>
+
+    <script>
+        const apiUrl = 'http://localhost:8080/api/tasks';
+        let currentTaskId = null;
+
+        // Function to fetch and display tasks
+        async function fetchTasks() {
+            const response = await fetch(apiUrl);
+            const tasks = await response.json();
+            const tasksList = document.getElementById('tasks-list');
+            tasksList.innerHTML = '';  // Clear previous tasks
+
+            tasks.forEach(task => {
+                const taskElement = document.createElement('div');
+                taskElement.classList.add('task');
+                taskElement.innerHTML = `
+                    <div>
+                        <strong>${task.title}</strong><br>
+                        <small>${task.description}</small><br>
+                        <span class="createdAt">Created at: ${new Date(task.createdAt).toLocaleString()}</span><br>
+                        <span class="status ${task.completed ? '' : 'incomplete'}">
+                            ${task.completed ? 'Completed' : 'Incomplete'}
+                        </span>
+                    </div>
+                    <div>
+                        <button onclick="editTask(${task.id}, '${task.title}', '${task.description}', ${task.completed})">Edit</button>
+                        <button onclick="deleteTask(${task.id})">Delete</button>
+                    </div>
+                `;
+                tasksList.appendChild(taskElement);
+            });
+        }
+
+        // Function to create a new task
+        document.getElementById('task-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+
+            const newTask = { title, description };
+
+            await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newTask)
+            });
+
+            fetchTasks();  // Refresh task list
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
+        });
+
+        // Function to delete a task
+        async function deleteTask(id) {
+            await fetch(`${apiUrl}/${id}`, {
+                method: 'DELETE'
+            });
+
+            fetchTasks();  // Refresh task list
+        }
+
+        // Function to edit a task
+        function editTask(id, title, description, completed) {
+            currentTaskId = id;
+            document.getElementById('edit-title').value = title;
+            document.getElementById('edit-description').value = description;
+            document.getElementById('edit-completed').checked = completed;
+            document.getElementById('edit-form').style.display = 'block'; // Show the edit form
+        }
+
+        // Function to save edited task
+        async function saveEdit() {
+            const updatedTask = {
+                title: document.getElementById('edit-title').value,
+                description: document.getElementById('edit-description').value,
+                completed: document.getElementById('edit-completed').checked
+            };
+
+            await fetch(`${apiUrl}/${currentTaskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedTask)
+            });
+
+            fetchTasks();  // Refresh task list
+            cancelEdit();  // Hide the edit form
+        }
+
+        // Function to cancel editing
+        function cancelEdit() {
+            document.getElementById('edit-form').style.display = 'none'; // Hide the edit form
+        }
+
+        // Initial fetch of tasks
+        fetchTasks();
+    </script>
+
+</body>
+</html>
