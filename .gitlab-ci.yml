@@ -10,7 +10,7 @@ stages:
 variables:
   MAVEN_OPTS: "-Dmaven.test.failure.ignore=false"
 
-# 1) Build: compilar el proyecto o
+# 1) Build: compilar el proyecto
 build:
   stage: build
   script:
@@ -30,41 +30,79 @@ test:
     paths:
       - target/
 
-# 3) Packing: empaquetar y copiar JAR a EC2
+# 3) Packing: empaquetar el JAR
 packing:
   stage: packing
-  before_script:
-    - apk update && apk add --no-cache openssh-client
   script:
-    - echo "Empaquetando con Maven"
+    - echo "Empaquetando con Maven (sin tests)"
     - mvn -B package -DskipTests
-    - echo "Ajustando los permisos de la clave"
-    - chmod 600 /builds/202510/to-do-list.tmp/AWS_KEY
-    - echo "Copiando JAR a EC2"
-    - scp -o StrictHostKeyChecking=no -i $AWS_KEY target/to-do-list-api-0.0.1-SNAPSHOT.jar ubuntu@3.145.138.105:/home/ubuntu/to-do-list-api/api.jar
+    - echo "Mostrando contenido de target/"
+    - ls -l target
   artifacts:
     paths:
       - target/to-do-list-api-0.0.1-SNAPSHOT.jar
 
-# 4) Deploy: detener versión anterior y levantar la nueva
+# 4) Simulación Deploy: mover el JAR a una carpeta de 'deploy'
 deploy:
   stage: deploy
-  before_script:
-    - apk update && apk add --no-cache openssh-client
   script:
-    - echo "Ajustando los permisos de la clave"
-    - chmod 600 /builds/202510/to-do-list.tmp/AWS_KEY
-    - echo "Deteniendo cualquier instancia previa de la API"
-    - nohup ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "nohup pkill -f 'java -jar'  > /dev/null 2>&1 &"
-    - echo "Ejecutando la nueva versión"
-    - nohup ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "nohup java -jar /home/ubuntu/to-do-list-api/api.jar > /dev/null 2>&1 &"
-  environment: production
+    - echo "Simulando deploy de la aplicación"
+    - mkdir -p deploy
+    - cp target/to-do-list-api-0.0.1-SNAPSHOT.jar deploy/api.jar
+    - echo "Contenido de la carpeta deploy/"
+    - ls -l deploy
+  dependencies:
+    - packing
+  artifacts:
+    paths:
+      - deploy/api.jar
 
-# 5) Post-deploy: verificación
+# 5) API Test: ejecutar el jar y probar el CRUD
+api_test:
+  stage: post_deploy
+  script:
+    - echo "Iniciando API para pruebas"
+    - java -jar deploy/api.jar &
+    - echo "Esperando que la API arranque..."
+    - sleep 12
+
+    - echo "Probando INSERT (POST)"
+    - >
+      curl -X POST http://localhost:8080/api/tasks
+      -H "Content-Type: application/json"
+      -d '{"title":"Test desde CI","description":"insertado por CI/CD","completed":false}' 
+      -o post_output.txt -w "%{http_code}" > http_status_post.txt
+
+    - echo "Código HTTP POST:"
+    - cat http_status_post.txt
+    - '[ "$(cat http_status_post.txt)" = "200" ] || (echo "POST falló" && exit 1)'
+
+    - echo "Probando LISTADO (GET)"
+    - curl -s http://localhost:8080/api/tasks > get_output.json
+    - cat get_output.json
+    - 'grep -q "Test desde CI" get_output.json || (echo "GET no contiene la tarea insertada" && exit 1)'
+
+  dependencies:
+    - deploy
+  artifacts:
+    paths:
+      - post_output.txt
+      - get_output.json
+
+
+# 6) Post-deploy: verificación simulada
 post_deploy:
   stage: post_deploy
-  before_script:
-    - apk update && apk add --no-cache openssh-client curl
   script:
-    - echo "Verificando que la API responda"
-    - ssh -o StrictHostKeyChecking=no -i $AWS_KEY ubuntu@3.145.138.105 "curl -f http://localhost:8080/api/tasks || exit 1"
+    - echo "Verificando deploy simulado..."
+    - |
+      if [ -f deploy/api.jar ]; then
+        echo "OK: api.jar existe en deploy/"
+      else
+        echo "ERROR: api.jar no encontrado en deploy/"
+        exit 1
+      fi
+    - echo "Pipeline completo build + test + package + deploy simulado + verificación"
+  dependencies:
+    - deploy
+
