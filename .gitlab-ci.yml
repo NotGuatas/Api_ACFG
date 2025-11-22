@@ -75,7 +75,14 @@ api_test:
 
     - echo "Código HTTP POST:"
     - cat http_status_post.txt
-    - '[ "$(cat http_status_post.txt)" = "200" ] || (echo "POST falló" && exit 1)'
+    - |
+      STATUS=$(cat http_status_post.txt)
+      if [ "$STATUS" = "200" ] || [ "$STATUS" = "201" ]; then
+        echo "POST OK con código $STATUS"
+      else
+        echo "POST falló con código $STATUS"
+        exit 1
+      fi
 
     - echo "Probando LISTADO (GET)"
     - curl -s http://localhost:8080/api/tasks > get_output.json
